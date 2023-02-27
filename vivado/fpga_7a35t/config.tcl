@@ -19,6 +19,7 @@
 # THE SOFTWARE.
 
 # clock source
+# STARTUPE2, IBUFG, IBUFGDS, IBUFDS_GTE2
 set clk_src "STARTUPE2"
 
 if {$clk_src == "STARTUPE2"} {

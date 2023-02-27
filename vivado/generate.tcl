@@ -97,7 +97,10 @@ if {$clk_src == "IBUFG"} {
     if {$idx >= 0} {
         set pins [lreplace $pins $idx $idx]
     }
-} elseif {$clk_src == "IBUFGDS"} {
+} elseif {$clk_src == "IBUFGDS" ||
+        $clk_src == "IBUFDS_GTE2" ||
+        $clk_src == "IBUFDS_GTE3" ||
+        $clk_src == "IBUFDS_GTE4"} {
     set idx [lsearch $pins [lindex $clk_pin 0]]
     if {$idx >= 0} {
         set pins [lreplace $pins $idx $idx]
@@ -150,7 +153,10 @@ module fpga
 
 if {$clk_src == "IBUFG"} {
     puts $fp "    input  wire clk,"
-} elseif {$clk_src == "IBUFGDS"} {
+} elseif {$clk_src == "IBUFGDS" ||
+        $clk_src == "IBUFDS_GTE2" ||
+        $clk_src == "IBUFDS_GTE3" ||
+        $clk_src == "IBUFDS_GTE4"} {
     puts $fp "    input  wire clk_p,"
     puts $fp "    input  wire clk_n,"
 }
@@ -209,6 +215,70 @@ BUFG
 clk_bufg_inst (
     .I(clk_ibufgds),
     .O(clk_int)
+);"
+
+} elseif {$clk_src == "IBUFDS_GTE2"} {
+
+    puts $fp "// Clock sourced from MGT ref clock pin
+wire clk_ibufds_gte2;
+
+IBUFDS_GTE2 clk_ibufds_gte2_inst (
+    .I     (clk_p),
+    .IB    (clk_n),
+    .CEB   (1'b0),
+    .O     (clk_ibufds_gte2),
+    .ODIV2 ()
+);
+
+BUFG clk_bufg_inst (
+    .I       (clk_ibufds_gte2),
+    .O       (clk_int)
+);"
+
+} elseif {$clk_src == "IBUFDS_GTE3"} {
+
+    puts $fp "// Clock sourced from MGT ref clock pin
+wire clk_ibufds_gte3;
+
+IBUFDS_GTE3 clk_ibufds_gte3_inst (
+    .I     (clk_p),
+    .IB    (clk_n),
+    .CEB   (1'b0),
+    .O     (),
+    .ODIV2 (clk_ibufds_gte3)
+);
+
+BUFG_GT clk_bufg_gt_inst (
+    .CE      (1'b1),
+    .CEMASK  (1'b1),
+    .CLR     (1'b0),
+    .CLRMASK (1'b1),
+    .DIV     (3'd0),
+    .I       (clk_ibufds_gte3),
+    .O       (clk_int)
+);"
+
+} elseif {$clk_src == "IBUFDS_GTE4"} {
+
+    puts $fp "// Clock sourced from MGT ref clock pin
+wire clk_ibufds_gte4;
+
+IBUFDS_GTE4 clk_ibufds_gte4_inst (
+    .I     (clk_p),
+    .IB    (clk_n),
+    .CEB   (1'b0),
+    .O     (),
+    .ODIV2 (clk_ibufds_gte4)
+);
+
+BUFG_GT clk_bufg_gt_inst (
+    .CE      (1'b1),
+    .CEMASK  (1'b1),
+    .CLR     (1'b0),
+    .CLRMASK (1'b1),
+    .DIV     (3'd0),
+    .I       (clk_ibufds_gte4),
+    .O       (clk_int)
 );"
 
 } elseif {$clk_src == "STARTUPE2"} {
@@ -362,6 +432,14 @@ create_clock -period $clk_period -name clk \[get_ports clk\]"
 
     puts $fp "set_property -dict {LOC [lindex $clk_pin 0] IOSTANDARD $clk_iostandard} \[get_ports clk_p\]
 set_property -dict {LOC [lindex $clk_pin 1] IOSTANDARD $clk_iostandard} \[get_ports clk_n\]
+create_clock -period $clk_period -name clk \[get_ports clk_p\]"
+
+} elseif {$clk_src == "IBUFDS_GTE2" ||
+        $clk_src == "IBUFDS_GTE3" ||
+        $clk_src == "IBUFDS_GTE4"} {
+
+    puts $fp "set_property -dict {LOC [lindex $clk_pin 0]} \[get_ports clk_p\]
+set_property -dict {LOC [lindex $clk_pin 1]} \[get_ports clk_n\]
 create_clock -period $clk_period -name clk \[get_ports clk_p\]"
 
 } elseif {$clk_src == "STARTUPE2"} {
