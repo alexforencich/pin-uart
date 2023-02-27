@@ -21,11 +21,28 @@
 # clock source
 set clk_src "STARTUPE3"
 
-# frequency of clock source (in Hz)
-set clk_freq "50000000"
-# worst-case period for timing analysis (in ns)
-# Fcfgmclk is 50 MHz +/- 15%, rounding to 15 ns period
-set clk_period "15"
+if {$clk_src == "STARTUPE3"} {
+
+    # Fcfgmclk is 50 MHz +/- 15%, rounding to 15 ns period
+
+    # frequency of clock source (in Hz)
+    set clk_freq "50000000"
+    # worst-case period for timing analysis (in ns)
+    set clk_period "15"
+
+} else {
+
+    # clock pin
+    set clk_pin {}
+    # iostandard for clock pin
+    set clk_iostandard "LVCMOS18"
+
+    # frequency of clock source (in Hz)
+    set clk_freq "50000000"
+    # worst-case period for timing analysis (in ns)
+    set clk_period [format "%.3f" [expr 1000000000.0 / $clk_freq]]
+
+}
 
 # desired baud rate
 set baud "115200"

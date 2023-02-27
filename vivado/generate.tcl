@@ -43,7 +43,9 @@ if {[info exists skip_pins_by_index]} {
 if {[info exists skip_pins_by_name]} {
     foreach x $skip_pins_by_name {
         set idx [lsearch $pins $x]
-        set pins [lreplace $pins $idx $idx]
+        if {$idx >= 0} {
+            set pins [lreplace $pins $idx $idx]
+        }
     }
 }
 
@@ -54,13 +56,23 @@ if { ![info exists clk_src] } {
     set clk_src "STARTUPE3"
 }
 
+# clock pin
+if { ![info exists clk_pin] } {
+    set clk_pin {}
+}
+
+# iostandard for clock pin
+if { ![info exists clk_iostandard] } {
+    set clk_iostandard "LVCMOS18"
+}
+
 # frequency of clock source (in Hz)
 if { ![info exists clk_freq] } {
     set clk_freq "50000000"
 }
 # worst-case period for timing analysis (in ns)
 if { ![info exists clk_period] } {
-    set clk_period "15"
+    set clk_period [format "%.3f" [expr 1000000000.0 / $clk_freq]]
 }
 
 # desired baud rate
@@ -76,6 +88,24 @@ if { ![info exists group_count] } {
 # iostandard for all pins
 if { ![info exists iostandard] } {
     set iostandard "LVCMOS18"
+}
+
+
+# skip clock pins
+if {$clk_src == "IBUFG"} {
+    set idx [lsearch $pins [lindex $clk_pin 0]]
+    if {$idx >= 0} {
+        set pins [lreplace $pins $idx $idx]
+    }
+} elseif {$clk_src == "IBUFGDS"} {
+    set idx [lsearch $pins [lindex $clk_pin 0]]
+    if {$idx >= 0} {
+        set pins [lreplace $pins $idx $idx]
+    }
+    set idx [lsearch $pins [lindex $clk_pin 1]]
+    if {$idx >= 0} {
+        set pins [lreplace $pins $idx $idx]
+    }
 }
 
 
@@ -118,6 +148,13 @@ THE SOFTWARE.
 module fpga
 ("
 
+if {$clk_src == "IBUFG"} {
+    puts $fp "    input  wire clk,"
+} elseif {$clk_src == "IBUFGDS"} {
+    puts $fp "    input  wire clk_p,"
+    puts $fp "    input  wire clk_n,"
+}
+
 for { set i 0 } { $i < [llength $pins] } { incr i } {
     set pin [lindex $pins $i]
     if { $i < [expr [llength $pins]-1 ] } {
@@ -129,19 +166,60 @@ for { set i 0 } { $i < [llength $pins] } { incr i } {
 
 puts $fp ");
 
-wire clk;
+wire clk_int;
 "
 
-if {$clk_src == "STARTUPE2"} {
+if {$clk_src == "IBUFG"} {
+
+    puts $fp "// Clock sourced from single input pin
+wire clk_ibufg;
+
+IBUFG #(
+   .IBUF_LOW_PWR(\"TRUE\"),
+   .IOSTANDARD(\"DEFAULT\")
+)
+clk_ibufg_inst (
+    .I(clk),
+    .O(clk_ibufg)
+);
+
+BUFG
+clk_bufg_inst (
+    .I(clk_ibufg),
+    .O(clk_int)
+);"
+
+} elseif {$clk_src == "IBUFGDS"} {
+
+    puts $fp "// Clock sourced from differential input pin
+wire clk_ibufgds;
+
+IBUFGDS #(
+   .DIFF_TERM(\"FALSE\"),
+   .IBUF_LOW_PWR(\"TRUE\"),
+   .IOSTANDARD(\"DEFAULT\")
+)
+clk_ibufgds_inst (
+    .I(clk_p),
+    .IB(clk_n),
+    .O(clk_ibufgds)
+);
+
+BUFG
+clk_bufg_inst (
+    .I(clk_ibufgds),
+    .O(clk_int)
+);"
+
+} elseif {$clk_src == "STARTUPE2"} {
 
     puts $fp "// Internal clock sourced from ring oscillator
-wire int_clk;
-wire int_clk_bufg;
+wire cfgmclk;
 
 STARTUPE2
 startupe2_inst (
     .CFGCLK(),
-    .CFGMCLK(int_clk),
+    .CFGMCLK(cfgmclk),
     .EOS(),
     .CLK(1'b0),
     .GSR(1'b0),
@@ -157,22 +235,19 @@ startupe2_inst (
 
 BUFG
 clk_bufg_inst (
-    .I(int_clk),
-    .O(int_clk_bufg)
-);
-
-assign clk = int_clk_bufg;"
+    .I(cfgmclk),
+    .O(clk_int)
+);"
 
 } elseif {$clk_src == "STARTUPE3"} {
 
     puts $fp "// Internal clock sourced from ring oscillator
-wire int_clk;
-wire int_clk_bufg;
+wire cfgmclk;
 
 STARTUPE3
 startupe3_inst (
     .CFGCLK(),
-    .CFGMCLK(int_clk),
+    .CFGMCLK(cfgmclk),
     .DI(),
     .DO(4'b0000),
     .DTS(4'b1111),
@@ -192,11 +267,9 @@ startupe3_inst (
 
 BUFG
 clk_bufg_inst (
-    .I(int_clk),
-    .O(int_clk_bufg)
-);
-
-assign clk = int_clk_bufg;"
+    .I(cfgmclk),
+    .O(clk_int)
+);"
 
 }
 
@@ -218,7 +291,7 @@ reg \[GROUP_COUNT-1:0\] shift_reg = 1'b0;
 reg \[CL_PRESCALE-1:0\] prescale_reg = PRESCALE;
 reg \[5:0\] shift_count_reg = 0;
 
-always @(posedge clk) begin
+always @(posedge clk_int) begin
     shift_rst_reg <= 1'b0;
     shift_reg <= 0;
 
@@ -244,7 +317,7 @@ end
 
 for { set i 0 } { $i < [llength $pins] } { incr i } {
     set pin [lindex $pins $i]
-    puts $fp "pin_uart #(.NAME(\"${pin}\")) pin_${pin}_uart_inst (.clk(clk), .rst(shift_rst_reg), .shift(shift_reg\[${i}%GROUP_COUNT\]), .out(${pin}));"
+    puts $fp "pin_uart #(.NAME(\"${pin}\")) pin_${pin}_uart_inst (.clk(clk_int), .rst(shift_rst_reg), .shift(shift_reg\[${i}%GROUP_COUNT\]), .out(${pin}));"
 }
 
 puts $fp "
@@ -280,15 +353,26 @@ puts $fp "# Copyright (c) 2023 Alex Forencich
 # clock
 "
 
-if {$clk_src == "STARTUPE2"} {
+if {$clk_src == "IBUFG"} {
+
+    puts $fp "set_property -dict {LOC [lindex $clk_pin 0] IOSTANDARD $clk_iostandard} \[get_ports clk\]
+create_clock -period $clk_period -name clk \[get_ports clk\]"
+
+} elseif {$clk_src == "IBUFGDS"} {
+
+    puts $fp "set_property -dict {LOC [lindex $clk_pin 0] IOSTANDARD $clk_iostandard} \[get_ports clk_p\]
+set_property -dict {LOC [lindex $clk_pin 1] IOSTANDARD $clk_iostandard} \[get_ports clk_n\]
+create_clock -period $clk_period -name clk \[get_ports clk_p\]"
+
+} elseif {$clk_src == "STARTUPE2"} {
 
     puts $fp "# Fcfgmclk is 65 MHz with no specified tolerance, rounding to 10 ns period
-create_clock -period 10 -name cfgmclk \[get_pins startupe2_inst/CFGMCLK\]"
+create_clock -period $clk_period -name cfgmclk \[get_pins startupe2_inst/CFGMCLK\]"
 
 } elseif {$clk_src == "STARTUPE3"} {
 
     puts $fp "# Fcfgmclk is 50 MHz +/- 15%, rounding to 15 ns period
-create_clock -period 15 -name cfgmclk \[get_pins startupe3_inst/CFGMCLK\]"
+create_clock -period $clk_period -name cfgmclk \[get_pins startupe3_inst/CFGMCLK\]"
 
 }
     puts $fp "
