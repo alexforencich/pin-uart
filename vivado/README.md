@@ -4,7 +4,7 @@
 
 This variant of the pin UART supports Vivado.  The build process uses a TCL script to extract a list of device GPIO pins and write out the top-level HDL and constraints files, as a result no external pinout files are required.
 
-Currently, the clocking configuration only supports STARTUPE3.
+Currently, the clocking configuration only supports STARTUPE2/STARTUPE3.
 
 ## How to build
 
