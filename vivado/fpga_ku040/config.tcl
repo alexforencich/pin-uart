@@ -39,5 +39,5 @@ set iostandard "LVCMOS18"
 
 # pins to skip
 set skip_pins_by_index {}
-set skip_pins_by_name {AJ8 AM10}
+set skip_pins_by_name {}
 
