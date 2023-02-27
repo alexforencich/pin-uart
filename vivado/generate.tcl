@@ -130,8 +130,42 @@ for { set i 0 } { $i < [llength $pins] } { incr i } {
 puts $fp ");
 
 wire clk;
+"
 
-// Internal clock sourced from ring oscillator
+if {$clk_src == "STARTUPE2"} {
+
+    puts $fp "// Internal clock sourced from ring oscillator
+wire int_clk;
+wire int_clk_bufg;
+
+STARTUPE2
+startupe2_inst (
+    .CFGCLK(),
+    .CFGMCLK(int_clk),
+    .EOS(),
+    .CLK(1'b0),
+    .GSR(1'b0),
+    .GTS(1'b0),
+    .KEYCLEARB(1'b1),
+    .PACK(1'b0),
+    .PREQ(),
+    .USRCCLKO(1'b0),
+    .USRCCLKTS(1'b1),
+    .USRDONEO(1'b0),
+    .USRDONETS(1'b1)
+);
+
+BUFG
+clk_bufg_inst (
+    .I(int_clk),
+    .O(int_clk_bufg)
+);
+
+assign clk = int_clk_bufg;"
+
+} elseif {$clk_src == "STARTUPE3"} {
+
+    puts $fp "// Internal clock sourced from ring oscillator
 wire int_clk;
 wire int_clk_bufg;
 
@@ -162,8 +196,11 @@ clk_bufg_inst (
     .O(int_clk_bufg)
 );
 
-assign clk = int_clk_bufg;
+assign clk = int_clk_bufg;"
 
+}
+
+puts $fp "
 localparam CLK_FREQ = $clk_freq;
 localparam BAUD = $baud;
 localparam PRESCALE = CLK_FREQ / BAUD;
@@ -241,10 +278,20 @@ puts $fp "# Copyright (c) 2023 Alex Forencich
 # THE SOFTWARE.
 
 # clock
+"
 
-# Fcfgmclk is 50 MHz +/- 15%, rounding to 15 ns period
-create_clock -period 15 -name cfgmclk \[get_pins startupe3_inst/CFGMCLK\]
+if {$clk_src == "STARTUPE2"} {
 
+    puts $fp "# Fcfgmclk is 65 MHz with no specified tolerance, rounding to 10 ns period
+create_clock -period 10 -name cfgmclk \[get_pins startupe2_inst/CFGMCLK\]"
+
+} elseif {$clk_src == "STARTUPE3"} {
+
+    puts $fp "# Fcfgmclk is 50 MHz +/- 15%, rounding to 15 ns period
+create_clock -period 15 -name cfgmclk \[get_pins startupe3_inst/CFGMCLK\]"
+
+}
+    puts $fp "
 # pins"
 
 foreach pin $pins {
